@@ -20,5 +20,5 @@ fi
 
 echo "== [3/3] recompiler (native)"
 cmake -S "$ROOT/recompiler" -B "$ROOT/recompiler/build" -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
-cmake --build "$ROOT/recompiler/build" >/dev/null
+cmake --build "$ROOT/recompiler/build" --target psxrecomp-game psxrecomp-bios >/dev/null
 echo "ok"

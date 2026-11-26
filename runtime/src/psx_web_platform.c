@@ -86,6 +86,44 @@ static int stage_small(const char *url, const char *dest) {
     return ok;
 }
 
+/* Saves: the page loads IndexedDB into Module.psxSaves ({path: Uint8Array})
+ * before the runtime starts; restore_saves() writes them back into the
+ * in-memory root, and psx_web_persist() hands every published memory card to
+ * Module.psxPersist (IndexedDB + optional Module.psxCardSaved hook). */
+#include <emscripten/em_asm.h>
+#include <stdint.h>
+
+static void restore_saves(void) {
+    int count = MAIN_THREAD_EM_ASM_INT({
+        Module.psxSavesList = Object.keys(Module.psxSaves || {});
+        return Module.psxSavesList.length;
+    });
+    for (int i = 0; i < count; ++i) {
+        char path[512];
+        int len = MAIN_THREAD_EM_ASM_INT({
+            stringToUTF8(Module.psxSavesList[$0], $1, 512);
+            return Module.psxSaves[Module.psxSavesList[$0]].length;
+        }, i, path);
+        uint8_t *buf = malloc(len ? (size_t)len : 1);
+        MAIN_THREAD_EM_ASM({ HEAPU8.set(Module.psxSaves[Module.psxSavesList[$0]], $1); }, i, buf);
+        mkdirs_for(path);
+        FILE *f = fopen(path, "wb");
+        if (f) { fwrite(buf, 1, (size_t)len, f); fclose(f); }
+        fprintf(stderr, "psxrecomp(web): restored %s (%d bytes)\n", path, len);
+        free(buf);
+    }
+}
+
+void psx_web_persist(const char *path, const uint8_t *a, uint32_t na,
+                     const uint8_t *b, uint32_t nb) {
+    MAIN_THREAD_EM_ASM({
+        const bytes = new Uint8Array($2 + $4);
+        bytes.set(HEAPU8.subarray($1, $1 + $2));
+        if ($4) bytes.set(HEAPU8.subarray($3, $3 + $4), $2);
+        if (Module.psxPersist) Module.psxPersist(UTF8ToString($0), bytes);
+    }, path, a, na, b, nb);
+}
+
 /* list_url: newline-separated paths relative to the page, copied to "/<path>".
  * disc_dir: page-relative folder holding game.cue and its bins, exposed at
  * /disc. Returns 0 when something required is missing. */
@@ -106,6 +144,8 @@ int psx_web_stage_files(const char *list_url, const char *disc_dir) {
         }
     }
     free(list);
+
+    restore_saves();
 
     char url[512];
     snprintf(url, sizeof url, "%s/game.cue", disc_dir);

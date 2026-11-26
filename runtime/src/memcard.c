@@ -161,6 +161,13 @@ static int publish_card(const MemCard* c, const uint8_t* tail, uint32_t size) {
 #endif
     }
     if (!ok) remove(temporary);
+#if defined(PSX_WEB)
+    if (ok) {
+        extern void psx_web_persist(const char*, const uint8_t*, uint32_t,
+                                    const uint8_t*, uint32_t);
+        psx_web_persist(c->filepath, c->data, MEMCARD_SIZE, tail, size);
+    }
+#endif
     return ok ? 0 : -1;
 }
 

@@ -37,7 +37,36 @@
   };
   if (!crossOriginIsolated) status.textContent = 'Precisa de COOP/COEP (SharedArrayBuffer).';
   canvas.addEventListener('click', () => canvas.focus());
+
+  // Memory cards live in IndexedDB, one record per file, keyed by page + path.
+  const scope = location.pathname.replace(/[^/]*$/, '');
+  const db = new Promise((ok, fail) => {
+    const req = indexedDB.open('psxrecomp-web', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('files');
+    req.onsuccess = () => ok(req.result);
+    req.onerror = () => fail(req.error);
+  });
+  Module.psxPersist = (path, bytes) => {
+    db.then((d) => d.transaction('files', 'readwrite').objectStore('files').put(bytes, scope + '|' + path))
+      .catch((e) => console.warn('save failed', e));
+    if (Module.psxCardSaved) Module.psxCardSaved(path, bytes);
+  };
+  db.then((d) => new Promise((ok) => {
+    const saves = {};
+    const req = d.transaction('files').objectStore('files').openCursor();
+    req.onsuccess = () => {
+      const c = req.result;
+      if (!c) return ok(saves);
+      if (c.key.startsWith(scope + '|')) saves[c.key.slice(scope.length + 1)] = c.value;
+      c.continue();
+    };
+    req.onerror = () => ok(saves);
+  })).catch(() => ({})).then((saves) => {
+    Module.psxSaves = saves;
+    const s = document.createElement('script');
+    s.src = '@JS@';
+    document.body.appendChild(s);
+  });
 </script>
-<script src="@JS@" async></script>
 </body>
 </html>
