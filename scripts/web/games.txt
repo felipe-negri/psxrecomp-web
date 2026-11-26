@@ -1,0 +1,2 @@
+# serial      game repository (built at the pinned commit)          commit   executable
+SCUS-94423    https://github.com/mstan/ApeEscapeRecomp.git           6fbb330  ApeEscapeRecomp

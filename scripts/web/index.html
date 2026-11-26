@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@TITLE@</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #canvas { position: absolute; inset: 0; margin: auto; display: block;
+            max-width: 100vw; max-height: 100vh; width: 100vw; height: 75vw;
+            image-rendering: auto; outline: none; }
+  @media (min-aspect-ratio: 4/3) { #canvas { width: 133.333vh; height: 100vh; } }
+  #status { position: absolute; left: 12px; bottom: 10px; color: #aaa;
+            font: 13px system-ui, sans-serif; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+<div id="status">Carregando…</div>
+<script>
+  const status = document.getElementById('status');
+  const canvas = document.getElementById('canvas');
+  var Module = {
+    canvas,
+    arguments: ['--game', '/game.toml', '--disc', '/disc/game.cue',
+                '--renderer', 'software', '--no-launcher'],
+    preRun: [() => {
+      const q = new URLSearchParams(location.search);
+      ENV.PSX_INTERNAL_RESOLUTION = q.get('res') || localStorage.getItem('psxweb-res') || '1';
+      ENV.PSX_SUPERSAMPLE = q.get('ss') || '1';
+      if (q.get('fps')) ENV.PSX_FPS_TELEMETRY = '1';
+    }],
+    print: (t) => console.log(t),
+    printErr: (t) => console.warn(t),
+    setStatus: (t) => { status.textContent = t; if (!t) status.remove(); },
+    onRuntimeInitialized: () => { Module.setStatus(''); canvas.focus(); },
+  };
+  if (!crossOriginIsolated) status.textContent = 'Precisa de COOP/COEP (SharedArrayBuffer).';
+  canvas.addEventListener('click', () => canvas.focus());
+</script>
+<script src="@JS@" async></script>
+</body>
+</html>
