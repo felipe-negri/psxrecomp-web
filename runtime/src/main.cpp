@@ -18813,7 +18813,13 @@ static const PsxRuntimeMenuHost kRuntimeMenuHost = {
     nullptr, runtime_menu_setting_get, runtime_menu_setting_set, runtime_menu_setting_enabled,
 };
 
+#if defined(PSX_WEB)
+extern "C" int psx_web_stage_files(const char* list_url, const char* disc_dir);
+#endif
 int main(int argc, char** argv) {
+#if defined(PSX_WEB)
+    if (!psx_web_stage_files("web-files.txt", "disc")) return EXIT_FAILURE;
+#endif
     psx_disc_warning_set("");
     g_main_argc = argc;
     g_main_argv = argv;

@@ -2,6 +2,7 @@
 // Distributed under the MIT License.
 #ifndef TOML11_COMMENTS_HPP
 #define TOML11_COMMENTS_HPP
+#include <exception>
 #include <initializer_list>
 #include <iterator>
 #include <stdexcept>

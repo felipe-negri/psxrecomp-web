@@ -145,6 +145,11 @@ option(PSX_LOBBY_DEV_LIST "Lobby browser ignores game_version (dev testing only)
 # Diagnostics recording defaults on in every channel, with explicit saved
 # choices preserved. See runtime/playtest_diagnostics.cmake.
 include("${CMAKE_CURRENT_LIST_DIR}/psx_release_channel.cmake")
+if(EMSCRIPTEN)
+    # Every object (SDL3 and zlib included) must share the pthread/atomics ABI.
+    add_compile_options(-pthread -fwasm-exceptions)
+    add_link_options(-pthread -fwasm-exceptions)
+endif()
 set(PSX_SDL_BACKEND "SDL3" CACHE STRING "SDL backend (SDL3 or SDL2)")
 set_property(CACHE PSX_SDL_BACKEND PROPERTY STRINGS SDL3 SDL2)
 string(TOUPPER "${PSX_SDL_BACKEND}" _psx_sdl_backend)
@@ -575,6 +580,11 @@ set(PSXRECOMP_RUNTIME_SOURCES
     # (sljit Tier-2 in-process JIT backend removed 2026-07-15 — was disabled by
     # default since 2026-06-25; gaps fall to the interpreter, gcc/tcc unaffected.)
 )
+if(EMSCRIPTEN)
+    # Browser: no ucontext fibers (HLE scheduler only) and no GL 3.x-only calls.
+    list(REMOVE_ITEM PSXRECOMP_RUNTIME_SOURCES ${PSXRECOMP_ROOT}/runtime/src/psx_fiber.c)
+    list(APPEND PSXRECOMP_RUNTIME_SOURCES ${PSXRECOMP_ROOT}/runtime/src/psx_web_platform.c)
+endif()
 # TCP `disasm` command only (debug_server.c); development-only even when the
 # production TCP listener is opted in.
 if(PSX_DEBUG_TOOLS)
@@ -2116,6 +2126,17 @@ function(psxrecomp_add_runtime_target target)
         target_link_libraries(${target} PRIVATE ${PSX_SDL_STATIC_LDFLAGS})
     else()
         target_link_libraries(${target} PRIVATE ${PSX_SDL_LIBRARIES})
+    endif()
+    if(EMSCRIPTEN)
+        target_compile_definitions(${target} PRIVATE PSX_WEB=1)
+        set_target_properties(${target} PROPERTIES SUFFIX ".js")
+        target_link_options(${target} PRIVATE
+            -pthread -sPROXY_TO_PTHREAD=1 -sPTHREAD_POOL_SIZE=12
+            -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=1073741824 -sMAXIMUM_MEMORY=2147483648
+            -sSTACK_SIZE=67108864 -sDEFAULT_PTHREAD_STACK_SIZE=8388608
+            -sMAX_WEBGL_VERSION=2 -sMIN_WEBGL_VERSION=2 -sFULL_ES3=1
+            -sWASMFS=1 -sFORCE_FILESYSTEM=1 -sEXIT_RUNTIME=0 -sENVIRONMENT=web,worker
+            -sEXPORTED_RUNTIME_METHODS=FS,ENV,callMain,HEAPU8 -sINVOKE_RUN=1 -sASSERTIONS=1 "-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$Browser")
     endif()
 
     # zlib: boot_state v4 savestate compression (RAM/VRAM/SPU blobs).
