@@ -36,15 +36,36 @@ FIRST_BIN="$DISC/$(grep -o 'FILE "[^"]*"' "$DISC/game.cue" | head -1 | sed 's/^F
 step 2 "identify"
 SERIAL="$(python3 "$ROOT/scripts/web/disc_serial.py" "$FIRST_BIN")"
 read -r REPO COMMIT FW_OVERRIDE UI_OVERRIDE < <(awk -v s="$SERIAL" '$1 == s { print $2, $3, $4, $5 }' "$ROOT/scripts/web/games.txt") || true
-[ -n "${REPO:-}" ] || { echo "no psxrecomp game project for $SERIAL" >&2; exit 2; }
-echo "   $SERIAL -> $REPO @ $COMMIT"
+GENERIC=0
+if [ -n "${REPO:-}" ]; then
+  echo "   $SERIAL -> $REPO @ $COMMIT"
+else
+  # No hand-made project: scaffold one from the disc and recompile adaptively
+  # (scripts/web/adapt.sh grows coverage with headless discovery runs).
+  GENERIC=1; N=8
+  echo "   $SERIAL has no game project: generic adaptive recompilation"
+fi
 
 step 3 "game project"
-GAME="$WORK/$(basename "$REPO" .git)"
-if [ ! -d "$GAME/.git" ]; then git clone -q "$REPO" "$GAME"; fi
-git -C "$GAME" fetch -q origin 2>/dev/null || true
-git -C "$GAME" checkout -q -f "$COMMIT"
-git -C "$GAME" submodule update -q --init recomp-ui 2>/dev/null || true
+if [ "$GENERIC" = 1 ]; then
+  GAME="$WORK/generic/Generic_${SERIAL//-/_}"
+  if [ ! -d "$GAME/.git" ]; then
+    mkdir -p "$WORK/generic"
+    sh "$ROOT/tools/new_project_layout/setup_project.sh" --disc "$DISC/game.cue" --dir "$WORK/generic" \
+      --name "Generic_${SERIAL//-/_}" --yes \
+      > "$WORK/$NAME-scaffold.log" 2>&1 || { tail -5 "$WORK/$NAME-scaffold.log" >&2; exit 1; }
+  fi
+  # One framework commit for every generic game, so they share a build tree.
+  FW_OVERRIDE="$(cat "$ROOT/scripts/web/GENERIC_BASE")"
+  # The scaffold records the dump's absolute path; point it at this run's disc.
+  sed -i "s|^disc = .*|disc = \"$DISC/game.cue\"|" "$GAME/game.toml"
+else
+  GAME="$WORK/$(basename "$REPO" .git)"
+  if [ ! -d "$GAME/.git" ]; then git clone -q "$REPO" "$GAME"; fi
+  git -C "$GAME" fetch -q origin 2>/dev/null || true
+  git -C "$GAME" checkout -q -f "$COMMIT"
+  git -C "$GAME" submodule update -q --init recomp-ui 2>/dev/null || true
+fi
 # Build against the framework commit the game pins (gitlink, or
 # framework_pins.txt when the project records it there), plus this fork's web
 # runtime, applied by anchors (scripts/web/apply_web.py) so it fits any commit.
@@ -128,7 +149,11 @@ PY
     || { tail -5 "$WORK/$NAME-generate.log" >&2; exit 1; }
 fi
 
-step 5 "compile (C -> WebAssembly)"
+if [ "$GENERIC" = 1 ]; then
+  step 5 "adaptive discovery (headless runs -> recompile)"
+  "$ROOT/scripts/web/adapt.sh" "$GAME" "$DISC/game.cue" "${PSX_ADAPT_ROUNDS:-3}" "${PSX_ADAPT_PARALLEL:-3}" "${PSX_ADAPT_SECONDS:-150}"
+fi
+step $((N - 2)) "compile (C -> WebAssembly)"
 # shellcheck disable=SC1091
 source "$ROOT/tools/emsdk/emsdk_env.sh" >/dev/null 2>&1
 # The cache pins absolute paths: start over when this checkout or the game
@@ -141,6 +166,7 @@ mkdir -p "$GAME/build-web"
 echo "$STAMP" > "$GAME/build-web/.psx-port-root"
 emcmake cmake -S "$GAME" -B "$GAME/build-web" -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DPSX_RECOMP_UI=OFF -DPSX_NETPLAY=OFF -DPSX_REWIND=OFF -DPSX_ENABLE_VULKAN=OFF \
+    $( [ "$GENERIC" = 1 ] && echo -DPSX_NATIVE_CPU_SPANS=OFF ) \
     > "$WORK/$NAME-configure.log" 2>&1 || { tail -5 "$WORK/$NAME-configure.log" >&2; exit 1; }
 cmake --build "$GAME/build-web" --target psx-runtime > "$WORK/$NAME-build.log" 2>&1 \
   || { grep -m5 -E "error" "$WORK/$NAME-build.log" >&2; exit 1; }
@@ -148,7 +174,7 @@ EXE="$(cat "$GAME/build-web/psxrecomp_exe_name-psx-runtime.txt")"
 # wasm-ld turns calls with mismatched C/C++ prototypes into traps.
 grep -A2 "function signature mismatch" "$WORK/$NAME-build.log" | sed 's/^/   warning: /' || true
 
-step 6 "package"
+step $((N - 1)) "package"
 rm -rf "$OUT"; mkdir -p "$OUT/disc"
 cp "$GAME/build-web/$EXE.js" "$GAME/build-web/$EXE.wasm" "$OUT/"
 cp -r "$GAME/build-web/bios" "$GAME/build-web/mods" "$OUT/"
@@ -168,5 +194,5 @@ python3 "$ROOT/scripts/web/mod_state.py" "$OUT/mods" "$(cat "$OUT/disc/$(basenam
 TITLE="$(python3 -c 'import sys,tomllib;print(tomllib.load(open(sys.argv[1],"rb"))["game"]["name"])' "$GAME/game.toml")"
 sed -e "s|@TITLE@|$TITLE|" -e "s|@JS@|$EXE.js|" "$ROOT/scripts/web/index.html" > "$OUT/index.html"
 
-step 7 "done"
+step $N "done"
 echo "   $OUT ($(du -sh "$OUT" | cut -f1)); serve with scripts/web/serve.py $OUT"
