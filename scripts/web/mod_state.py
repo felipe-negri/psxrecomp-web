@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Write mods/state.toml for a web build.
 
-usage: mod_state.py <build/web-name/mods> <disc data-track sha256>
+usage: mod_state.py <build/web-name/mods> <disc data-track sha256> [package/feature ...]
 
 Turns off, among default-on features:
   - diagnostics recording and widescreen (no log sink, 4:3 canvas);
+  - features named on the command line (plugins the build does not link);
   - every feature of a package whose targets name a disc_sha256 this disc
     does not have (the runtime refuses to start with such a package enabled).
 """
@@ -13,7 +14,7 @@ import sys
 import tomllib
 
 
-def main(mods_dir, disc_sha):
+def main(mods_dir, disc_sha, *forced):
     off, skipped = [], []
     for manifest in sorted(pathlib.Path(mods_dir, 'bundled').glob('*/*/manifest.toml')):
         m = tomllib.loads(manifest.read_text())
@@ -24,7 +25,8 @@ def main(mods_dir, disc_sha):
             if not feat.get('default_enabled'):
                 continue
             fid = feat['id']
-            if mismatch or pid.endswith('.diagnostics') or fid == 'widescreen':
+            if (mismatch or pid.endswith('.diagnostics') or fid == 'widescreen'
+                    or f'{pid}/{fid}' in forced):
                 off.append((pid, fid))
         if mismatch:
             skipped.append(pid)
@@ -37,4 +39,4 @@ def main(mods_dir, disc_sha):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2])
+    main(*sys.argv[1:])
