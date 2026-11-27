@@ -49,7 +49,7 @@ git -C "$GAME" submodule update -q --init recomp-ui 2>/dev/null || true
 PIN="$(git -C "$GAME" ls-tree HEAD psxrecomp-v4 psxrecomp | awk '$2 == "commit" { print $3; exit }')"
 [ -n "$PIN" ] || { echo "game pins no psxrecomp commit" >&2; exit 1; }
 FW="$WORK/framework/$PIN"
-PATCH_ID="$(git -C "$ROOT" diff "$(cat "$ROOT/scripts/web/BASE")" HEAD -- . ':!scripts' ':!.gitignore' | sha256sum | cut -c1-16)"
+PATCH_ID="$(git -C "$ROOT" diff "$(cat "$ROOT/scripts/web/BASE")" HEAD -- . ':!scripts' ':!.gitignore' ':!runtime/src/main.cpp' | sha256sum | cut -c1-16)"
 if [ "$(cat "$FW/.psx-web-patch" 2>/dev/null)" != "$PATCH_ID" ]; then
   echo "   framework ${PIN:0:7} + web runtime"
   git -C "$ROOT" worktree remove --force "$FW" 2>/dev/null || rm -rf "$FW"
@@ -58,9 +58,10 @@ if [ "$(cat "$FW/.psx-web-patch" 2>/dev/null)" != "$PATCH_ID" ]; then
     || git -C "$ROOT" fetch -q --depth 1 origin "$PIN" 2>/dev/null \
     || git -C "$ROOT" fetch -q --depth 1 https://github.com/RetroPortingToolKit/psxrecomp.git "$PIN"
   git -C "$ROOT" worktree add -q --detach "$FW" "$PIN"
-  git -C "$ROOT" diff "$(cat "$ROOT/scripts/web/BASE")" HEAD -- . ':!scripts' ':!.gitignore' \
+  git -C "$ROOT" diff "$(cat "$ROOT/scripts/web/BASE")" HEAD -- . ':!scripts' ':!.gitignore' ':!runtime/src/main.cpp' \
     | git -C "$FW" apply --3way --whitespace=nowarn \
     || { echo "web runtime patch does not apply to framework ${PIN:0:7}" >&2; exit 1; }
+  python3 "$ROOT/scripts/web/hook_main.py" "$FW/runtime/src/main.cpp"
   echo "$PATCH_ID" > "$FW/.psx-web-patch"
 fi
 rm -rf "$GAME/psxrecomp-v4" "$GAME/psxrecomp"
