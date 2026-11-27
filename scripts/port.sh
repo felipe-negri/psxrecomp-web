@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds a PS1 game for the browser.
 #   scripts/port.sh <name> <disc.cue|disc.chd|disc.pbp>
-# Output: build/web-<name>/ (index.html, runtime .js/.wasm, disc/, web-files.txt).
+[ -f "$GAME/build-web/game_options.toml" ] && cp "$GAME/build-web/game_options.toml" "$OUT/"
+(cd "$OUT" && for d in bios mods assets "$(dirname "$GAME_EXE")"; do [ -d "$d" ] && find "$d" -type f; done; ls game.toml game_options.toml 2>/dev/null) | sort -u > "$OUT/web-files.txt"
 # Only discs whose serial has a game project in scripts/web/games.txt are accepted:
 # psxrecomp needs per-game configuration and seeds, not just the disc.
 set -euo pipefail
