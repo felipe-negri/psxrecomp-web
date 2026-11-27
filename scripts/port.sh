@@ -145,6 +145,8 @@ emcmake cmake -S "$GAME" -B "$GAME/build-web" -G Ninja -DCMAKE_BUILD_TYPE=Releas
 cmake --build "$GAME/build-web" --target psx-runtime > "$WORK/$NAME-build.log" 2>&1 \
   || { grep -m5 -E "error" "$WORK/$NAME-build.log" >&2; exit 1; }
 EXE="$(cat "$GAME/build-web/psxrecomp_exe_name-psx-runtime.txt")"
+# wasm-ld turns calls with mismatched C/C++ prototypes into traps.
+grep -A2 "function signature mismatch" "$WORK/$NAME-build.log" | sed 's/^/   warning: /' || true
 
 step 6 "package"
 rm -rf "$OUT"; mkdir -p "$OUT/disc"

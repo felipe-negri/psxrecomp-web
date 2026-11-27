@@ -10,3 +10,4 @@ SLUS-01059    https://github.com/TechnicallyComputers/Marvel-vs.-Capcom-Clash-of
 SLUS-01212    https://github.com/TechnicallyComputers/Metal-Slug-X-Recomp.git  eddccb5
 SLUS-00821    https://github.com/TechnicallyComputers/Street-Fighter-Alpha-3-Recomp.git  7772f7e
 SCUS-94560    https://github.com/TechnicallyComputers/TwistedMetal4Recomp.git  c75337f
+SCUS-94451    https://github.com/alexbeavs-ps1-ports/syphon-filter-2-recomp.git  5066d26

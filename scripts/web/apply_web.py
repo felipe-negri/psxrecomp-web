@@ -151,6 +151,20 @@ edit('psxrecomp_cli.py', lambda t: t if 'cand.resolve()' in t else (
     t.replace('        if (cand / "bios").is_dir():\n            return cand\n',
               '        if (cand / "bios").is_dir():\n            return cand.resolve()\n', 1)), required=False)
 
+# C/C++ prototypes that disagree only in the return type run on x86 but trap
+# in WebAssembly (wasm-ld replaces the call with "unreachable").
+def fix_proto(name, src_rel):
+    src = FW / src_rel
+    if not src.exists():
+        return
+    m = re.search(r'^(\w+)\s+' + name + r'\(', src.read_text(), re.M)
+    if m:
+        edit('runtime/src/main.cpp', lambda t: re.sub(
+            r'extern "C" \w+ ' + name + r'\(', f'extern "C" {m.group(1)} {name}(', t), required=False)
+
+
+fix_proto('gpu_ws_set_nw_guest_projection', 'runtime/src/gpu.c')
+
 if problems:
     print('\n'.join(problems), file=sys.stderr)
     sys.exit(1)
