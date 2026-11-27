@@ -26,7 +26,7 @@
                 '--renderer', 'software', '--no-launcher'],
     preRun: [() => {
       const q = new URLSearchParams(location.search);
-      ENV.PSX_INTERNAL_RESOLUTION = q.get('res') || localStorage.getItem('psxweb-res') || '1';
+      ENV.PSX_INTERNAL_RESOLUTION = q.get('res') || localStorage.getItem('psxweb-res') || 'native';
       ENV.PSX_SUPERSAMPLE = q.get('ss') || '1';
       if (q.get('fps')) ENV.PSX_FPS_TELEMETRY = '1';
     }],
@@ -37,6 +37,54 @@
   };
   if (!crossOriginIsolated) status.textContent = 'Precisa de COOP/COEP (SharedArrayBuffer).';
   canvas.addEventListener('click', () => canvas.focus());
+
+  // Input: keyboard + gamepads → the runtime's virtual DualShock (host pad).
+  // PS1 pad word is active-low: select l3 r3 start up right down left l2 r2 l1 r1 tri circle cross square.
+  const BIT = { select: 0, l3: 1, r3: 2, start: 3, up: 4, right: 5, down: 6, left: 7,
+                l2: 8, r2: 9, l1: 10, r1: 11, triangle: 12, circle: 13, cross: 14, square: 15 };
+  const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+                 x: 'cross', s: 'circle', z: 'square', a: 'triangle', q: 'l1', w: 'r1',
+                 e: 'l2', r: 'r2', t: 'l3', y: 'r3', Enter: 'start', Shift: 'select' };
+  const CODES = { 13: 'Enter', 16: 'Shift', 37: 'ArrowLeft', 38: 'ArrowUp', 39: 'ArrowRight', 40: 'ArrowDown' };
+  const held = new Set();
+  const keyName = (e) => {
+    const k = e.key && e.key !== 'Unidentified' ? e.key : (CODES[e.keyCode] || String.fromCharCode(e.keyCode || 0));
+    return KEYS[k] || KEYS[k.toLowerCase()];
+  };
+  const onKey = (down) => (e) => {
+    const b = keyName(e);
+    if (!b) return;
+    down ? held.add(b) : held.delete(b);
+    e.preventDefault();
+  };
+  window.addEventListener('keydown', onKey(true), true);
+  window.addEventListener('keyup', onKey(false), true);
+  window.addEventListener('blur', () => held.clear());
+  const PAD = ['cross', 'circle', 'square', 'triangle', 'l1', 'r1', 'l2', 'r2', 'select', 'start',
+               'l3', 'r3', 'up', 'down', 'left', 'right'];
+  const axis = (v) => Math.max(0, Math.min(255, Math.round(128 + 127 * (Math.abs(v) < 0.15 ? 0 : v))));
+  function pumpInput() {
+    const set = Module._psx_web_set_host_pad;
+    if (set) {
+      const on = new Set(held);
+      let lx = 128, ly = 128, rx = 128, ry = 128, lt = 0, rt = 0;
+      for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) {
+        if (!gp) continue;
+        gp.buttons.forEach((btn, i) => { if (btn.pressed && PAD[i]) on.add(PAD[i]); });
+        if (gp.axes.length >= 4) { lx = axis(gp.axes[0]); ly = axis(gp.axes[1]); rx = axis(gp.axes[2]); ry = axis(gp.axes[3]); }
+        lt = Math.round(255 * (gp.buttons[6]?.value || 0)); rt = Math.round(255 * (gp.buttons[7]?.value || 0));
+        break;
+      }
+      // Arrow keys also drive the left stick, for analog-only games.
+      if (on.has('left')) lx = 0; if (on.has('right')) lx = 255;
+      if (on.has('up')) ly = 0; if (on.has('down')) ly = 255;
+      let word = 0xFFFF;
+      for (const b of on) word &= ~(1 << BIT[b]);
+      set(1, word, lx, ly, rx, ry, lt, rt);
+    }
+    requestAnimationFrame(pumpInput);
+  }
+  requestAnimationFrame(pumpInput);
 
   // Memory cards live in IndexedDB, one record per file, keyed by page + path.
   const scope = location.pathname.replace(/[^/]*$/, '');

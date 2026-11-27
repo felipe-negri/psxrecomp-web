@@ -151,6 +151,45 @@ edit('psxrecomp_cli.py', lambda t: t if 'cand.resolve()' in t else (
     t.replace('        if (cand / "bios").is_dir():\n            return cand\n',
               '        if (cand / "bios").is_dir():\n            return cand.resolve()\n', 1)), required=False)
 
+# Input: SDL's browser input does not reach the runtime thread under
+# PROXY_TO_PTHREAD, so the page feeds keyboard and gamepads through
+# psx_web_set_host_pad(). Where the framework has the debug server's "host"
+# virtual pad (analog, same path as TCP set_input layer=host) it goes there and
+# main() reads it in web builds; older frameworks get the digital override.
+HOST_PAD = """
+#if defined(PSX_WEB)
+#include <emscripten/emscripten.h>
+EMSCRIPTEN_KEEPALIVE void psx_web_set_host_pad(int armed, int buttons, int lx, int ly,
+                                               int rx, int ry, int lt, int rt) {
+%s
+}
+#endif
+"""
+HOST_BODY = """    s_host_buttons = (uint16_t)buttons;
+    s_host_axes[0] = (uint8_t)lx; s_host_axes[1] = (uint8_t)ly;
+    s_host_axes[2] = (uint8_t)rx; s_host_axes[3] = (uint8_t)ry;
+    s_host_lt = (uint8_t)lt; s_host_rt = (uint8_t)rt;
+    s_host_layer = armed;"""
+OVERRIDE_BODY = """    (void)lx; (void)ly; (void)rx; (void)ry; (void)lt; (void)rt;
+    s_input_override = armed ? (buttons & 0xFFFF) : -1;"""
+
+
+def host_pad(text):
+    if 'psx_web_set_host_pad' in text:
+        return text
+    if 'static int s_host_layer' in text:
+        return text + HOST_PAD % HOST_BODY
+    if 'static int s_input_override' in text:
+        return text + HOST_PAD % OVERRIDE_BODY
+    return None
+
+
+edit('runtime/src/debug_server.c', host_pad, required=False)
+edit('runtime/src/main.cpp', insert_after(
+    r'^static int host_pad_layer\(uint16_t\* buttons, uint8_t st\[4\], uint8_t\* lt,\n\s*uint8_t\* rt\) \{\n',
+    '#if defined(PSX_WEB)\n    return debug_server_get_host_pad(buttons, st, lt, rt);\n#endif\n',
+    'return debug_server_get_host_pad(buttons, st, lt, rt);\n#endif\n#ifndef'), required=False)
+
 # C/C++ prototypes that disagree only in the return type run on x86 but trap
 # in WebAssembly (wasm-ld replaces the call with "unreachable").
 def fix_proto(name, src_rel):
