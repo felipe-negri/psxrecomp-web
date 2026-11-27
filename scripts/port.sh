@@ -45,25 +45,44 @@ if [ ! -d "$GAME/.git" ]; then git clone -q "$REPO" "$GAME"; fi
 git -C "$GAME" fetch -q origin 2>/dev/null || true
 git -C "$GAME" checkout -q -f "$COMMIT"
 git -C "$GAME" submodule update -q --init recomp-ui 2>/dev/null || true
-[ -z "${UI_OVERRIDE:-}" ] || { git -C "$GAME/recomp-ui" fetch -q origin "$UI_OVERRIDE" 2>/dev/null; git -C "$GAME/recomp-ui" checkout -q -f "$UI_OVERRIDE"; }
-# Build against the framework commit the game pins, plus this fork's web
-# runtime changes (the diff from scripts/web/BASE to HEAD, outside scripts/).
-PIN="${FW_OVERRIDE:-$(git -C "$GAME" ls-tree HEAD psxrecomp-v4 psxrecomp | awk '$2 == "commit" { print $3; exit }')}"
+# Build against the framework commit the game pins (gitlink, or
+# framework_pins.txt when the project records it there), plus this fork's web
+# runtime, applied by anchors (scripts/web/apply_web.py) so it fits any commit.
+pin_of() {  # <submodule path regex> <framework_pins key>
+  git -C "$GAME" ls-tree HEAD | awk -v re="^($1)\$" '$2 == "commit" && $4 ~ re { print $3; exit }' | grep . \
+    || sed -n "s/^$2=[0-9a-f]* (\([0-9a-f]\{40\}\)).*/\1/p" "$GAME/framework_pins.txt" 2>/dev/null | head -1
+}
+url_of() { git -C "$GAME" config -f .gitmodules --get-regexp "submodule\.($1)\.url" 2>/dev/null | awk '{ print $2; exit }'; }
+PIN="${FW_OVERRIDE:-$(pin_of 'psxrecomp-v4|psxrecomp' psxrecomp)}"
 [ -n "$PIN" ] || { echo "game pins no psxrecomp commit" >&2; exit 1; }
+fetch_pin() {  # <repo> <commit> <urls...>
+  local repo="$1" c="$2"; shift 2
+  git -C "$repo" cat-file -e "$c^{commit}" 2>/dev/null && return 0
+  for u in "$@"; do [ -n "$u" ] && git -C "$repo" fetch -q --depth 1 "$u" "$c" 2>/dev/null && return 0; done
+  return 1
+}
+fetch_pin "$ROOT" "$PIN" origin https://github.com/RetroPortingToolKit/psxrecomp.git "$(url_of 'psxrecomp-v4|psxrecomp')" \
+  || { echo "cannot fetch framework commit $PIN" >&2; exit 1; }
+if ! git -C "$ROOT" cat-file -e "$PIN:psxrecomp_cli.py" 2>/dev/null; then
+  # Too old for the scripted generate flow: use the web base and its launcher UI.
+  echo "   framework ${PIN:0:7} predates psxrecomp_cli.py; using the web base"
+  PIN="$(cat "$ROOT/scripts/web/BASE")"; UI_OVERRIDE="${UI_OVERRIDE:-f009bd76e272b541df840878b9259125d24d44ee}"
+fi
+UI_PIN="${UI_OVERRIDE:-$(pin_of recomp-ui recomp-ui)}"
+if [ -n "$UI_PIN" ] && [ -d "$GAME/recomp-ui" ]; then
+  [ -e "$GAME/recomp-ui/.git" ] || git clone -q "$(url_of recomp-ui)" "$GAME/recomp-ui"
+  fetch_pin "$GAME/recomp-ui" "$UI_PIN" origin https://github.com/RetroPortingToolKit/recomp-ui.git https://github.com/mstan/recomp-ui.git \
+    && git -C "$GAME/recomp-ui" checkout -q -f "$UI_PIN"
+fi
 FW="$WORK/framework/$PIN"
-PATCH_ID="$(git -C "$ROOT" diff "$(cat "$ROOT/scripts/web/BASE")" HEAD -- . ':!scripts' ':!.gitignore' ':!runtime/src/main.cpp' | sha256sum | cut -c1-16)"
+PATCH_ID="$(cat "$ROOT/scripts/web/apply_web.py" "$ROOT/runtime/src/psx_web_platform.c" "$ROOT/runtime/web/fetch_size.pre.js" | sha256sum | cut -c1-16)"
 if [ "$(cat "$FW/.psx-web-patch" 2>/dev/null)" != "$PATCH_ID" ]; then
   echo "   framework ${PIN:0:7} + web runtime"
   git -C "$ROOT" worktree remove --force "$FW" 2>/dev/null || rm -rf "$FW"
   git -C "$ROOT" worktree prune
-  git -C "$ROOT" cat-file -e "$PIN^{commit}" 2>/dev/null \
-    || git -C "$ROOT" fetch -q --depth 1 origin "$PIN" 2>/dev/null \
-    || git -C "$ROOT" fetch -q --depth 1 https://github.com/RetroPortingToolKit/psxrecomp.git "$PIN"
   git -C "$ROOT" worktree add -q --detach "$FW" "$PIN"
-  git -C "$ROOT" diff "$(cat "$ROOT/scripts/web/BASE")" HEAD -- . ':!scripts' ':!.gitignore' ':!runtime/src/main.cpp' \
-    | git -C "$FW" apply --3way --whitespace=nowarn \
-    || { echo "web runtime patch does not apply to framework ${PIN:0:7}" >&2; exit 1; }
-  python3 "$ROOT/scripts/web/hook_main.py" "$FW/runtime/src/main.cpp"
+  python3 "$ROOT/scripts/web/apply_web.py" "$FW" "$ROOT" \
+    || { echo "web runtime does not fit framework ${PIN:0:7}" >&2; exit 1; }
   echo "$PATCH_ID" > "$FW/.psx-web-patch"
 fi
 rm -rf "$GAME/psxrecomp-v4" "$GAME/psxrecomp"
