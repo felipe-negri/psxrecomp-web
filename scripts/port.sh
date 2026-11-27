@@ -61,16 +61,27 @@ fetch_pin() {  # <repo> <commit> <urls...>
   for u in "$@"; do [ -n "$u" ] && git -C "$repo" fetch -q --depth 1 "$u" "$c" 2>/dev/null && return 0; done
   return 1
 }
-fetch_pin "$ROOT" "$PIN" origin https://github.com/RetroPortingToolKit/psxrecomp.git "$(url_of 'psxrecomp-v4|psxrecomp')" \
-  || { echo "cannot fetch framework commit $PIN" >&2; exit 1; }
+FW_URLS=(origin https://github.com/RetroPortingToolKit/psxrecomp.git "$(url_of 'psxrecomp-v4|psxrecomp')" https://github.com/mstan/psxrecomp.git)
+if ! fetch_pin "$ROOT" "$PIN" "${FW_URLS[@]}"; then
+  # Some projects commit a gitlink that was never pushed; their
+  # framework_pins.txt names the published commit. Else use the web base.
+  ALT="$(sed -n "s/^psxrecomp=[0-9a-f]* (\([0-9a-f]\{40\}\)).*/\1/p" "$GAME/framework_pins.txt" 2>/dev/null | head -1)"
+  if [ -n "$ALT" ] && fetch_pin "$ROOT" "$ALT" "${FW_URLS[@]}"; then
+    echo "   framework ${PIN:0:7} is not published; using ${ALT:0:7} from framework_pins.txt"; PIN="$ALT"
+  else
+    echo "   framework ${PIN:0:7} is not published; using the web base"
+    PIN="$(cat "$ROOT/scripts/web/BASE")"
+  fi
+fi
 if ! git -C "$ROOT" cat-file -e "$PIN:psxrecomp_cli.py" 2>/dev/null; then
   # Too old for the scripted generate flow: use the web base and its launcher UI.
   echo "   framework ${PIN:0:7} predates psxrecomp_cli.py; using the web base"
   PIN="$(cat "$ROOT/scripts/web/BASE")"; UI_OVERRIDE="${UI_OVERRIDE:-f009bd76e272b541df840878b9259125d24d44ee}"
 fi
 UI_PIN="${UI_OVERRIDE:-$(pin_of recomp-ui recomp-ui)}"
-if [ -n "$UI_PIN" ] && [ -d "$GAME/recomp-ui" ]; then
-  [ -e "$GAME/recomp-ui/.git" ] || git clone -q "$(url_of recomp-ui)" "$GAME/recomp-ui"
+if [ -n "$UI_PIN" ]; then
+  [ -e "$GAME/recomp-ui/.git" ] || { rm -rf "$GAME/recomp-ui"; git clone -q "$(url_of recomp-ui || true)" "$GAME/recomp-ui" 2>/dev/null \
+    || git clone -q https://github.com/RetroPortingToolKit/recomp-ui.git "$GAME/recomp-ui"; }
   fetch_pin "$GAME/recomp-ui" "$UI_PIN" origin https://github.com/RetroPortingToolKit/recomp-ui.git https://github.com/mstan/recomp-ui.git \
     && git -C "$GAME/recomp-ui" checkout -q -f "$UI_PIN"
 fi
@@ -96,9 +107,17 @@ EMIT_CACHE="$FW/recompiler/build/CMakeCache.txt"
 if [ -f "$EMIT_CACHE" ] && ! grep -qx "CMAKE_HOME_DIRECTORY:INTERNAL=$(cd "$FW" && pwd -P)/recompiler" "$EMIT_CACHE"; then
   rm -rf "$FW/recompiler/build"
 fi
-python3 "$FW/psxrecomp_cli.py" generate --config "$GAME/game.toml" --project-root "$GAME" \
-    --disc "$DISC/game.cue" --no-toolchain-download > "$WORK/$NAME-generate.log" 2>&1 \
-  || { tail -5 "$WORK/$NAME-generate.log" >&2; exit 1; }
+generate() {
+  python3 "$FW/psxrecomp_cli.py" generate --config "$GAME/game.toml" --project-root "$GAME" \
+    --disc "$DISC/game.cue" --no-toolchain-download "$@" > "$WORK/$NAME-generate.log" 2>&1
+}
+if ! generate; then
+  # Dumps that differ from the project's reference (PBP conversions, other
+  # revisions) still carry the same boot EXE, which generate checks anyway.
+  grep -q "disc digests not in prepare_disc.known_" "$WORK/$NAME-generate.log" \
+    && { echo "   disc differs from the project's reference dump; continuing"; generate --skip-hash-check; } \
+    || { tail -5 "$WORK/$NAME-generate.log" >&2; exit 1; }
+fi
 
 step 5 "compile (C -> WebAssembly)"
 # shellcheck disable=SC1091

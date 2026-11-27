@@ -116,8 +116,8 @@ edit('runtime/src/main.cpp', insert_before(
     '#endif\n', 'extern "C" int psx_web_stage_files'))
 
 # Memory cards → IndexedDB (optional: older trees keep saves for the session).
-edit('runtime/src/memcard.c', insert_before(
-    r'^    return ok \? 0 : -1;\n\}',
+edit('runtime/src/memcard.c', insert_after(
+    r'^    if \(!ok\) remove\(temporary\);\n(?=    return ok \? 0 : -1;\n\})',
     '#if defined(PSX_WEB)\n'
     '    if (ok) {\n'
     '        extern void psx_web_persist(const char*, const uint8_t*, uint32_t,\n'
