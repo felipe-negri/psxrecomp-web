@@ -35,7 +35,7 @@ FIRST_BIN="$DISC/$(grep -o 'FILE "[^"]*"' "$DISC/game.cue" | head -1 | sed 's/^F
 
 step 2 "identify"
 SERIAL="$(python3 "$ROOT/scripts/web/disc_serial.py" "$FIRST_BIN")"
-read -r REPO COMMIT FW_OVERRIDE < <(awk -v s="$SERIAL" '$1 == s { print $2, $3, $4 }' "$ROOT/scripts/web/games.txt") || true
+read -r REPO COMMIT FW_OVERRIDE UI_OVERRIDE < <(awk -v s="$SERIAL" '$1 == s { print $2, $3, $4, $5 }' "$ROOT/scripts/web/games.txt") || true
 [ -n "${REPO:-}" ] || { echo "no psxrecomp game project for $SERIAL" >&2; exit 2; }
 echo "   $SERIAL -> $REPO @ $COMMIT"
 
@@ -45,6 +45,7 @@ if [ ! -d "$GAME/.git" ]; then git clone -q "$REPO" "$GAME"; fi
 git -C "$GAME" fetch -q origin 2>/dev/null || true
 git -C "$GAME" checkout -q -f "$COMMIT"
 git -C "$GAME" submodule update -q --init recomp-ui 2>/dev/null || true
+[ -z "${UI_OVERRIDE:-}" ] || { git -C "$GAME/recomp-ui" fetch -q origin "$UI_OVERRIDE" 2>/dev/null; git -C "$GAME/recomp-ui" checkout -q -f "$UI_OVERRIDE"; }
 # Build against the framework commit the game pins, plus this fork's web
 # runtime changes (the diff from scripts/web/BASE to HEAD, outside scripts/).
 PIN="${FW_OVERRIDE:-$(git -C "$GAME" ls-tree HEAD psxrecomp-v4 psxrecomp | awk '$2 == "commit" { print $3; exit }')}"

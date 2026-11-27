@@ -1,6 +1,6 @@
-# serial      game repository (built at the pinned commit)          commit   [framework commit, when the pinned one is too old for the web runtime]
+# serial      game repository (built at the pinned commit)          commit   [framework and recomp-ui commits, when the pinned ones are too old for the web runtime]
 SCUS-94423    https://github.com/mstan/ApeEscapeRecomp.git           6fbb330
 SLUS-00561    https://github.com/mstan/MegaManX4Recomp.git           4391109
 SLUS-01334    https://github.com/mstan/MegaManX5Recomp.git           4621214
 SLUS-01395    https://github.com/mstan/MegaManX6Recomp.git           a67f4d4
-SLUS-00603    https://github.com/VuloB1/MegaManLegendsRecomp.git     49a6897  9931615aa4a4495df8421d50ce0bca72237aa0ca
+SLUS-00603    https://github.com/VuloB1/MegaManLegendsRecomp.git     49a6897  9931615aa4a4495df8421d50ce0bca72237aa0ca  f009bd76e272b541df840878b9259125d24d44ee
