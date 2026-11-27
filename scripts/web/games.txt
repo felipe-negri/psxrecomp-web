@@ -4,12 +4,9 @@ SLUS-00561    https://github.com/mstan/MegaManX4Recomp.git           4391109
 SLUS-01334    https://github.com/mstan/MegaManX5Recomp.git           4621214
 SLUS-01395    https://github.com/mstan/MegaManX6Recomp.git           a67f4d4
 SLUS-00603    https://github.com/VuloB1/MegaManLegendsRecomp.git     49a6897  9931615aa4a4495df8421d50ce0bca72237aa0ca  f009bd76e272b541df840878b9259125d24d44ee
-SCUS-94244    https://github.com/alexbeavs-ps1-ports/crash-bandicoot-3-warped-recomp.git  3edfa29
 SCUS-94183    https://github.com/kirby1237/PaRappaTheRapperRecomp.git  dc2b085
 SLUS-00585    https://github.com/TechnicallyComputers/Klonoa-Door-to-Phantomile.git  99a7ccc
 SLUS-01059    https://github.com/TechnicallyComputers/Marvel-vs.-Capcom-Clash-of-Super-Heroes-Recomp.git  f7f7e34
 SLUS-01212    https://github.com/TechnicallyComputers/Metal-Slug-X-Recomp.git  eddccb5
 SLUS-00821    https://github.com/TechnicallyComputers/Street-Fighter-Alpha-3-Recomp.git  7772f7e
-SCUS-94451    https://github.com/alexbeavs-ps1-ports/syphon-filter-2-recomp.git  5066d26
 SCUS-94560    https://github.com/TechnicallyComputers/TwistedMetal4Recomp.git  c75337f
-SLUS-00453    https://github.com/douglasjv/mm8.git  4eae0f9
