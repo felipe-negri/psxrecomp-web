@@ -115,7 +115,7 @@ sha256sum "$FIRST_BIN" | cut -d' ' -f1 > "$OUT/disc/$(basename "$FIRST_BIN").sha
 FORCED_OFF="psx.enhancement.pgxp/pgxp"
 python3 "$ROOT/scripts/web/mod_state.py" "$OUT/mods" "$(cat "$OUT/disc/$(basename "$FIRST_BIN").sha256")" $FORCED_OFF
 [ -f "$GAME/build-web/game_options.toml" ] && cp "$GAME/build-web/game_options.toml" "$OUT/"
-(cd "$OUT" && for d in bios mods assets; do [ -d "$d" ] && find "$d" -type f; done; echo "$GAME_EXE"; ls game.toml game_options.toml 2>/dev/null) | sort -u > "$OUT/web-files.txt"
+(cd "$OUT" && for d in bios mods assets; do [ -d "$d" ] && find "$d" -type f; done; echo "$GAME_EXE"; ls game.toml game_options.toml 2>/dev/null || true) | sort -u > "$OUT/web-files.txt"
 TITLE="$(python3 -c 'import sys,tomllib;print(tomllib.load(open(sys.argv[1],"rb"))["game"]["name"])' "$GAME/game.toml")"
 sed -e "s|@TITLE@|$TITLE|" -e "s|@JS@|$EXE.js|" "$ROOT/scripts/web/index.html" > "$OUT/index.html"
 
