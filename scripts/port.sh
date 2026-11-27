@@ -114,7 +114,7 @@ generate() {
 if ! generate; then
   # Dumps that differ from the project's reference (PBP conversions, other
   # revisions) still carry the same boot EXE, which generate checks anyway.
-  grep -q "disc digests not in prepare_disc.known_" "$WORK/$NAME-generate.log" \
+  grep -qE "digests (are )?not in prepare_disc.known_" "$WORK/$NAME-generate.log" \
     && { echo "   disc differs from the project's reference dump; continuing"; generate --skip-hash-check; } \
     || { tail -5 "$WORK/$NAME-generate.log" >&2; exit 1; }
 fi
