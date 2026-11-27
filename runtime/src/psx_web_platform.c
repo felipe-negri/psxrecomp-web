@@ -164,7 +164,13 @@ int psx_web_stage_files(const char *list_url, const char *disc_dir) {
         char path[600];
         snprintf(url, sizeof url, "%s/%s", disc_dir, q1 + 1);
         snprintf(path, sizeof path, "/disc/%s", q1 + 1);
-        backend_t be = wasmfs_create_fetch_backend(url, 1u << 20);
+        /* The fetch backend's worker does not resolve relative URLs against
+         * the page, so hand it an absolute one built from the page URL. */
+        char abs_url[2048];
+        MAIN_THREAD_EM_ASM({
+            stringToUTF8(new URL(UTF8ToString($0), location.href).href, $1, 2048);
+        }, url, abs_url);
+        backend_t be = wasmfs_create_fetch_backend(abs_url, 1u << 20);
         if (wasmfs_create_file(path, 0444, be) < 0) {
             fprintf(stderr, "psxrecomp(web): could not map %s\n", url);
             fclose(cue);
