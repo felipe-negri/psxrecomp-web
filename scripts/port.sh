@@ -34,7 +34,7 @@ FIRST_BIN="$DISC/$(grep -o 'FILE "[^"]*"' "$DISC/game.cue" | head -1 | sed 's/^F
 
 step 2 "identify"
 SERIAL="$(python3 "$ROOT/scripts/web/disc_serial.py" "$FIRST_BIN")"
-read -r REPO COMMIT < <(awk -v s="$SERIAL" '$1 == s { print $2, $3 }' "$ROOT/scripts/web/games.txt") || true
+read -r REPO COMMIT FW_OVERRIDE < <(awk -v s="$SERIAL" '$1 == s { print $2, $3, $4 }' "$ROOT/scripts/web/games.txt") || true
 [ -n "${REPO:-}" ] || { echo "no psxrecomp game project for $SERIAL" >&2; exit 2; }
 echo "   $SERIAL -> $REPO @ $COMMIT"
 
@@ -46,7 +46,7 @@ git -C "$GAME" checkout -q -f "$COMMIT"
 git -C "$GAME" submodule update -q --init recomp-ui 2>/dev/null || true
 # Build against the framework commit the game pins, plus this fork's web
 # runtime changes (the diff from scripts/web/BASE to HEAD, outside scripts/).
-PIN="$(git -C "$GAME" ls-tree HEAD psxrecomp-v4 psxrecomp | awk '$2 == "commit" { print $3; exit }')"
+PIN="${FW_OVERRIDE:-$(git -C "$GAME" ls-tree HEAD psxrecomp-v4 psxrecomp | awk '$2 == "commit" { print $3; exit }')}"
 [ -n "$PIN" ] || { echo "game pins no psxrecomp commit" >&2; exit 1; }
 FW="$WORK/framework/$PIN"
 PATCH_ID="$(git -C "$ROOT" diff "$(cat "$ROOT/scripts/web/BASE")" HEAD -- . ':!scripts' ':!.gitignore' ':!runtime/src/main.cpp' | sha256sum | cut -c1-16)"
