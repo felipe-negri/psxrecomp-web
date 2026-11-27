@@ -115,7 +115,16 @@ if ! generate; then
   # Dumps that differ from the project's reference (PBP conversions, other
   # revisions) still carry the same boot EXE, which generate checks anyway.
   grep -qE "digests (are )?not in prepare_disc.known_" "$WORK/$NAME-generate.log" \
-    && { echo "   disc differs from the project's reference dump; continuing"; generate --skip-hash-check; } \
+    && { echo "   disc differs from the project's reference dump; continuing"
+         # Drop the reference digests from this local checkout (some CLI versions
+         # do not pass --skip-hash-check on to prepare_disc); the EXE check stays.
+         python3 - "$GAME/game.toml" <<'PY'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+t = re.sub(r'^known_(sizes|md5|sha1|crc32|sha256)\s*=\s*\[[^\]]*\]\s*\n', '', t, flags=re.M)
+open(p, 'w').write(t)
+PY
+         generate --skip-hash-check; } \
     || { tail -5 "$WORK/$NAME-generate.log" >&2; exit 1; }
 fi
 
