@@ -56,6 +56,14 @@ python3 "$ROOT/psxrecomp_cli.py" generate --config "$GAME/game.toml" --project-r
 step 5 "compile (C -> WebAssembly)"
 # shellcheck disable=SC1091
 source "$ROOT/tools/emsdk/emsdk_env.sh" >/dev/null 2>&1
+# The cache pins absolute paths: start over when this checkout or the game
+# tree moved (hosts that keep one tree per commit share games/).
+STAMP="$ROOT|$(cd "$GAME" && pwd -P)"
+if [ "$(cat "$GAME/build-web/.psx-port-root" 2>/dev/null)" != "$STAMP" ]; then
+  rm -rf "$GAME/build-web"
+fi
+mkdir -p "$GAME/build-web"
+echo "$STAMP" > "$GAME/build-web/.psx-port-root"
 emcmake cmake -S "$GAME" -B "$GAME/build-web" -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DPSX_RECOMP_UI=OFF -DPSX_NETPLAY=OFF -DPSX_REWIND=OFF -DPSX_ENABLE_VULKAN=OFF \
     > "$WORK/$NAME-configure.log" 2>&1 || { tail -5 "$WORK/$NAME-configure.log" >&2; exit 1; }
