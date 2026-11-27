@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Builds a PS1 game for the browser.
 #   scripts/port.sh <name> <disc.cue|disc.chd|disc.pbp>
-[ -f "$GAME/build-web/game_options.toml" ] && cp "$GAME/build-web/game_options.toml" "$OUT/"
-(cd "$OUT" && for d in bios mods assets "$(dirname "$GAME_EXE")"; do [ -d "$d" ] && find "$d" -type f; done; ls game.toml game_options.toml 2>/dev/null) | sort -u > "$OUT/web-files.txt"
+# Output: build/web-<name>/ (index.html, runtime .js/.wasm, disc/, web-files.txt).
 # Only discs whose serial has a game project in scripts/web/games.txt are accepted:
 # psxrecomp needs per-game configuration and seeds, not just the disc.
 set -euo pipefail
@@ -113,7 +112,8 @@ cp "$DISC"/* "$OUT/disc/"
 sha256sum "$FIRST_BIN" | cut -d' ' -f1 > "$OUT/disc/$(basename "$FIRST_BIN").sha256"
 # Default-on mods that need a different disc, diagnostics and widescreen stay off.
 python3 "$ROOT/scripts/web/mod_state.py" "$OUT/mods" "$(cat "$OUT/disc/$(basename "$FIRST_BIN").sha256")"
-(cd "$OUT" && find bios mods "$(dirname "$GAME_EXE")" game.toml -type f $( [ -d assets ] && echo -o -path 'assets/*' ) | sort -u > web-files.txt)
+[ -f "$GAME/build-web/game_options.toml" ] && cp "$GAME/build-web/game_options.toml" "$OUT/"
+(cd "$OUT" && for d in bios mods assets "$(dirname "$GAME_EXE")"; do [ -d "$d" ] && find "$d" -type f; done; ls game.toml game_options.toml 2>/dev/null) | sort -u > "$OUT/web-files.txt"
 TITLE="$(python3 -c 'import sys,tomllib;print(tomllib.load(open(sys.argv[1],"rb"))["game"]["name"])' "$GAME/game.toml")"
 sed -e "s|@TITLE@|$TITLE|" -e "s|@JS@|$EXE.js|" "$ROOT/scripts/web/index.html" > "$OUT/index.html"
 
