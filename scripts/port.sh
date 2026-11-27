@@ -44,19 +44,37 @@ if [ ! -d "$GAME/.git" ]; then git clone -q "$REPO" "$GAME"; fi
 git -C "$GAME" fetch -q origin 2>/dev/null || true
 git -C "$GAME" checkout -q -f "$COMMIT"
 git -C "$GAME" submodule update -q --init recomp-ui 2>/dev/null || true
-# Build against this checkout (the web runtime) instead of the pinned submodule.
+# Build against the framework commit the game pins, plus this fork's web
+# runtime changes (the diff from scripts/web/BASE to HEAD, outside scripts/).
+PIN="$(git -C "$GAME" ls-tree HEAD psxrecomp-v4 psxrecomp | awk '$2 == "commit" { print $3; exit }')"
+[ -n "$PIN" ] || { echo "game pins no psxrecomp commit" >&2; exit 1; }
+FW="$WORK/framework/$PIN"
+PATCH_ID="$(git -C "$ROOT" diff "$(cat "$ROOT/scripts/web/BASE")" HEAD -- . ':!scripts' ':!.gitignore' | sha256sum | cut -c1-16)"
+if [ "$(cat "$FW/.psx-web-patch" 2>/dev/null)" != "$PATCH_ID" ]; then
+  echo "   framework ${PIN:0:7} + web runtime"
+  git -C "$ROOT" worktree remove --force "$FW" 2>/dev/null || rm -rf "$FW"
+  git -C "$ROOT" worktree prune
+  git -C "$ROOT" cat-file -e "$PIN^{commit}" 2>/dev/null \
+    || git -C "$ROOT" fetch -q --depth 1 origin "$PIN" 2>/dev/null \
+    || git -C "$ROOT" fetch -q --depth 1 https://github.com/RetroPortingToolKit/psxrecomp.git "$PIN"
+  git -C "$ROOT" worktree add -q --detach "$FW" "$PIN"
+  git -C "$ROOT" diff "$(cat "$ROOT/scripts/web/BASE")" HEAD -- . ':!scripts' ':!.gitignore' \
+    | git -C "$FW" apply --3way --whitespace=nowarn \
+    || { echo "web runtime patch does not apply to framework ${PIN:0:7}" >&2; exit 1; }
+  echo "$PATCH_ID" > "$FW/.psx-web-patch"
+fi
 rm -rf "$GAME/psxrecomp-v4" "$GAME/psxrecomp"
-ln -s "$ROOT" "$GAME/psxrecomp-v4"
+ln -s "$FW" "$GAME/psxrecomp-v4"
 ln -s psxrecomp-v4 "$GAME/psxrecomp"
 mkdir -p "$GAME/mods/development"
 
 step 4 "recompile (MIPS -> C)"
-# Emitters build once in $ROOT/recompiler/build; drop a cache configured elsewhere.
-EMIT_CACHE="$ROOT/recompiler/build/CMakeCache.txt"
-if [ -f "$EMIT_CACHE" ] && ! grep -qx "CMAKE_HOME_DIRECTORY:INTERNAL=$ROOT/recompiler" "$EMIT_CACHE"; then
-  rm -rf "$ROOT/recompiler/build"
+# Emitters build once per framework tree; drop a cache configured elsewhere.
+EMIT_CACHE="$FW/recompiler/build/CMakeCache.txt"
+if [ -f "$EMIT_CACHE" ] && ! grep -qx "CMAKE_HOME_DIRECTORY:INTERNAL=$(cd "$FW" && pwd -P)/recompiler" "$EMIT_CACHE"; then
+  rm -rf "$FW/recompiler/build"
 fi
-python3 "$ROOT/psxrecomp_cli.py" generate --config "$GAME/game.toml" --project-root "$GAME" \
+python3 "$FW/psxrecomp_cli.py" generate --config "$GAME/game.toml" --project-root "$GAME" \
     --disc "$DISC/game.cue" --no-toolchain-download > "$WORK/$NAME-generate.log" 2>&1 \
   || { tail -5 "$WORK/$NAME-generate.log" >&2; exit 1; }
 
@@ -65,7 +83,7 @@ step 5 "compile (C -> WebAssembly)"
 source "$ROOT/tools/emsdk/emsdk_env.sh" >/dev/null 2>&1
 # The cache pins absolute paths: start over when this checkout or the game
 # tree moved (hosts that keep one tree per commit share games/).
-STAMP="$ROOT|$(cd "$GAME" && pwd -P)"
+STAMP="$(cd "$FW" && pwd -P)|$PATCH_ID|$(cd "$GAME" && pwd -P)"
 if [ "$(cat "$GAME/build-web/.psx-port-root" 2>/dev/null)" != "$STAMP" ]; then
   rm -rf "$GAME/build-web"
 fi
