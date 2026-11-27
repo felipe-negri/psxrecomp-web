@@ -2136,7 +2136,8 @@ function(psxrecomp_add_runtime_target target)
             -sSTACK_SIZE=67108864 -sDEFAULT_PTHREAD_STACK_SIZE=8388608
             -sMAX_WEBGL_VERSION=2 -sMIN_WEBGL_VERSION=2 -sFULL_ES3=1
             -sWASMFS=1 -sFORCE_FILESYSTEM=1 -sEXIT_RUNTIME=0 -sENVIRONMENT=web,worker
-            -sEXPORTED_RUNTIME_METHODS=FS,ENV,callMain,HEAPU8 -sINVOKE_RUN=1 -sASSERTIONS=1 "-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$Browser")
+            -sEXPORTED_RUNTIME_METHODS=FS,ENV,callMain,HEAPU8 -sINVOKE_RUN=1 -sASSERTIONS=1 "-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$Browser"
+            --pre-js ${PSXRECOMP_ROOT}/runtime/web/fetch_size.pre.js)
     endif()
 
     # zlib: boot_state v4 savestate compression (RAM/VRAM/SPU blobs).
