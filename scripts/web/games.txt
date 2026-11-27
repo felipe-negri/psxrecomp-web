@@ -1,2 +1,6 @@
-# serial      game repository (built at the pinned commit)          commit   executable
+# serial      game repository (built at the pinned commit)          commit
 SCUS-94423    https://github.com/mstan/ApeEscapeRecomp.git           6fbb330  ApeEscapeRecomp
+SLUS-00561    https://github.com/mstan/MegaManX4Recomp.git           4391109
+SLUS-01334    https://github.com/mstan/MegaManX5Recomp.git           4621214
+SLUS-01395    https://github.com/mstan/MegaManX6Recomp.git           a67f4d4
+SLUS-00603    https://github.com/VuloB1/MegaManLegendsRecomp.git     49a6897

@@ -776,7 +776,8 @@ def framework_root(project_root: Path) -> Path:
         (cand / "bios").is_dir() and (cand / "recompiler").is_dir()
     ):
         if (cand / "bios").is_dir():
-            return cand
+            # Resolve symlinks so every game shares one emitter build cache.
+            return cand.resolve()
     if (ROOT / "bios").is_dir() and (ROOT / "recompiler").is_dir():
         return ROOT
     return cand

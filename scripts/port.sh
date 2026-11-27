@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Builds a PS1 game for the browser.
-#   scripts/port.sh <name> <disc.cue|disc.chd>
+#   scripts/port.sh <name> <disc.cue|disc.chd|disc.pbp>
 # Output: build/web-<name>/ (index.html, runtime .js/.wasm, disc/, web-files.txt).
 # Only discs whose serial has a game project in scripts/web/games.txt are accepted:
 # psxrecomp needs per-game configuration and seeds, not just the disc.
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-NAME="${1:?usage: port.sh <name> <disc.cue|disc.chd>}"
-ROM="$(realpath "${2:?usage: port.sh <name> <disc.cue|disc.chd>}")"
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+NAME="${1:?usage: port.sh <name> <disc.cue|disc.chd|disc.pbp>}"
+ROM="$(realpath "${2:?usage: port.sh <name> <disc.cue|disc.chd|disc.pbp>}")"
 WORK="$ROOT/games"
 OUT="$ROOT/build/web-$NAME"
 N=7
@@ -26,7 +26,9 @@ case "${ROM,,}" in
     grep -o 'FILE "[^"]*"' "$ROM" | sed 's/^FILE "//; s/"$//' | while read -r f; do
       ln -f "$(dirname "$ROM")/$f" "$DISC/$f" 2>/dev/null || cp "$(dirname "$ROM")/$f" "$DISC/$f"
     done ;;
-  *) echo "unsupported disc format: $ROM (use .cue or .chd)" >&2; exit 1 ;;
+  *.pbp)
+    python3 "$ROOT/scripts/web/pbp2bin.py" "$ROM" "$DISC/game.bin" ;;
+  *) echo "unsupported disc format: $ROM (use .cue, .chd or .pbp)" >&2; exit 1 ;;
 esac
 FIRST_BIN="$DISC/$(grep -o 'FILE "[^"]*"' "$DISC/game.cue" | head -1 | sed 's/^FILE "//; s/"$//')"
 
@@ -49,6 +51,11 @@ ln -s psxrecomp-v4 "$GAME/psxrecomp"
 mkdir -p "$GAME/mods/development"
 
 step 4 "recompile (MIPS -> C)"
+# Emitters build once in $ROOT/recompiler/build; drop a cache configured elsewhere.
+EMIT_CACHE="$ROOT/recompiler/build/CMakeCache.txt"
+if [ -f "$EMIT_CACHE" ] && ! grep -qx "CMAKE_HOME_DIRECTORY:INTERNAL=$ROOT/recompiler" "$EMIT_CACHE"; then
+  rm -rf "$ROOT/recompiler/build"
+fi
 python3 "$ROOT/psxrecomp_cli.py" generate --config "$GAME/game.toml" --project-root "$GAME" \
     --disc "$DISC/game.cue" --no-toolchain-download > "$WORK/$NAME-generate.log" 2>&1 \
   || { tail -5 "$WORK/$NAME-generate.log" >&2; exit 1; }
@@ -79,18 +86,11 @@ cp -r "$GAME/build-web/bios" "$GAME/build-web/mods" "$OUT/"
 cp "$GAME/game.toml" "$OUT/"
 GAME_EXE="$(python3 -c 'import sys,tomllib;print(tomllib.load(open(sys.argv[1],"rb"))["game"]["exe"])' "$GAME/game.toml")"
 mkdir -p "$OUT/$(dirname "$GAME_EXE")"; cp "$GAME/$GAME_EXE" "$OUT/$GAME_EXE"
-# Diagnostics recording and widescreen stay off in the browser (4:3 canvas, no log sink).
-cat > "$OUT/mods/state.toml" <<'EOF'
-format_version = 2
-EOF
-for pkg in "$OUT"/mods/bundled/*.diagnostics "$OUT"/mods/bundled/*.enhancement.widescreen; do
-  [ -d "$pkg" ] || continue
-  id="$(basename "$pkg")"; feat=recording; [[ "$id" == *widescreen ]] && feat=widescreen
-  printf '\n[[feature]]\npackage_id = "%s"\nid = "%s"\nenabled = false\n' "$id" "$feat" >> "$OUT/mods/state.toml"
-done
 cp "$DISC"/* "$OUT/disc/"
 # Data-track SHA-256 for mod targeting, so the browser never hashes the whole image.
 sha256sum "$FIRST_BIN" | cut -d' ' -f1 > "$OUT/disc/$(basename "$FIRST_BIN").sha256"
+# Default-on mods that need a different disc, diagnostics and widescreen stay off.
+python3 "$ROOT/scripts/web/mod_state.py" "$OUT/mods" "$(cat "$OUT/disc/$(basename "$FIRST_BIN").sha256")"
 (cd "$OUT" && find bios mods "$(dirname "$GAME_EXE")" game.toml -type f $( [ -d assets ] && echo -o -path 'assets/*' ) | sort -u > web-files.txt)
 TITLE="$(python3 -c 'import sys,tomllib;print(tomllib.load(open(sys.argv[1],"rb"))["game"]["name"])' "$GAME/game.toml")"
 sed -e "s|@TITLE@|$TITLE|" -e "s|@JS@|$EXE.js|" "$ROOT/scripts/web/index.html" > "$OUT/index.html"

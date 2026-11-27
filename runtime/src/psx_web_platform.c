@@ -5,7 +5,7 @@
  * so only the "current context" identity is needed. Entering the legacy fiber
  * tier aborts loudly instead of corrupting state.
  *
- * GL: WebGL2 lacks glGetTexLevelParameteriv; the web build presents through
+ * GL: WebGL2 lacks glGetTexLevelParameteriv and glGetTexImage; the web build presents through
  * the software renderer, so the GL backend only needs the symbol to link.
  */
 #include "psx_fiber.h"
@@ -32,6 +32,10 @@ void psx_fiber_switch(psx_fiber_t target) {
 }
 
 void psx_fiber_destroy(psx_fiber_t fiber) { (void)fiber; }
+
+void glGetTexImage(unsigned target, int level, unsigned format, unsigned type, void *pixels) {
+    (void)target; (void)level; (void)format; (void)type; (void)pixels;
+}
 
 void glGetTexLevelParameteriv(unsigned target, int level, unsigned pname, int *params) {
     (void)target; (void)level; (void)pname;
