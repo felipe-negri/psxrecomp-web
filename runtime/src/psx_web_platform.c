@@ -176,6 +176,12 @@ int psx_web_stage_files(const char *list_url, const char *disc_dir) {
             fclose(cue);
             return 0;
         }
+        {   /* optional precomputed data-track SHA-256 (see disc_content_hash.h) */
+            char side_url[600], side_path[620];
+            snprintf(side_url, sizeof side_url, "%s.sha256", url);
+            snprintf(side_path, sizeof side_path, "%s.sha256", path);
+            stage_small(side_url, side_path);
+        }
         ++bins;
     }
     if (cue) fclose(cue);

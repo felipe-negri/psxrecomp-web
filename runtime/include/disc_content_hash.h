@@ -10,6 +10,7 @@
 #include <array>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -58,6 +59,15 @@ inline bool disc_content_sha256(const std::filesystem::path& path, std::string& 
         return true;
     }
 
+#if defined(PSX_WEB)
+    {
+        // Browser: the image streams over HTTP, so hashing it would download
+        // all of it. port.sh writes "<bin>.sha256" beside the data track.
+        std::ifstream sidecar(input.string() + ".sha256");
+        std::string hex;
+        if (sidecar >> hex && hex.size() == 64) { out = hex; return true; }
+    }
+#endif
     uint8_t digest[32];
     const auto result = psx_sha256_file(input, digest);
     if (result == PsxFileHashResult::OpenError) {

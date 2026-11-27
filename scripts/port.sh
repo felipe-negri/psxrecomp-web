@@ -81,6 +81,8 @@ for pkg in "$OUT"/mods/bundled/*.diagnostics "$OUT"/mods/bundled/*.enhancement.w
   printf '\n[[feature]]\npackage_id = "%s"\nid = "%s"\nenabled = false\n' "$id" "$feat" >> "$OUT/mods/state.toml"
 done
 cp "$DISC"/* "$OUT/disc/"
+# Data-track SHA-256 for mod targeting, so the browser never hashes the whole image.
+sha256sum "$FIRST_BIN" | cut -d' ' -f1 > "$OUT/disc/$(basename "$FIRST_BIN").sha256"
 (cd "$OUT" && find bios mods "$(dirname "$GAME_EXE")" game.toml -type f $( [ -d assets ] && echo -o -path 'assets/*' ) | sort -u > web-files.txt)
 TITLE="$(python3 -c 'import sys,tomllib;print(tomllib.load(open(sys.argv[1],"rb"))["game"]["name"])' "$GAME/game.toml")"
 sed -e "s|@TITLE@|$TITLE|" -e "s|@JS@|$EXE.js|" "$ROOT/scripts/web/index.html" > "$OUT/index.html"
