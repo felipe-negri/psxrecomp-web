@@ -30,6 +30,7 @@ case "${ROM,,}" in
     python3 "$ROOT/scripts/web/pbp2bin.py" "$ROM" "$DISC/game.bin" ;;
   *) echo "unsupported disc format: $ROM (use .cue, .chd or .pbp)" >&2; exit 1 ;;
 esac
+python3 "$ROOT/scripts/web/split_cue.py" "$DISC"
 FIRST_BIN="$DISC/$(grep -o 'FILE "[^"]*"' "$DISC/game.cue" | head -1 | sed 's/^FILE "//; s/"$//')"
 
 step 2 "identify"
